@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner Comercial Tenaun</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; margin: 0; background: #f0f2f5; }
+        .container { padding: 20px; max-width: 500px; margin: auto; }
+        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .hidden { display: none; }
+        input, select { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        button { width: 100%; padding: 15px; background: #007bff; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .btn-sec { background: #6c757d; }
+        .btn-corr { background: #ffc107; color: #000; }
+        #reader { width: 100%; border-radius: 10px; overflow: hidden; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="pantalla-registro" class="card">
+        <h2>Registro de Inventario</h2>
+        <input type="text" id="user-nombre" placeholder="Tu Nombre">
+        <select id="user-sucursal">
+            <option value="">Selecciona Sucursal</option>
+            <option value="Calbuco">Calbuco</option>
+			<option value="San Martin">San Martin</option>
+			<option value="Galvarino Riveros">Galvarino Riveros</option>
+            <option value="Ancud">Ancud</option>
+        </select>
+        <button onclick="irAScanner()">Empezar a Escanear</button>
+    </div>
+
+    <div id="pantalla-scanner" class="card hidden">
+        <p>Operador: <strong id="display-nombre"></strong> (<span id="display-sucursal"></span>)</p>
+        <div id="reader"></div>
+        
+        <div id="form-scan" class="hidden">
+            <h3>EAN: <span id="codigo-txt"></span></h3>
+            <input type="number" id="cantidad" value="1" min="1">
+            <button onclick="enviarDatos()">Confirmar y Guardar</button>
+            <button class="btn-sec" onclick="cancelarEscaneo()">Cancelar</button>
+        </div>
+
+        <hr>
+        <div id="ultimo-registro" class="hidden">
+            <p>Último: <span id="last-ean"></span> (Cant: <span id="last-qty"></span>)</p>
+            <button class="btn-corr" onclick="corregirUltimo()">Corregir Cantidad</button>
+        </div>
+        
+        <button class="btn-sec" onclick="volverARegistro()">Cerrar Sesión</button>
+    </div>
+</div>
+
+<script>
+    const scriptURL = https://script.google.com/macros/s/AKfycbzqyakodstRNW0EC7ENPp3QqFR5O_yDVScK6pz-ubMCfvkYkOWj6iDJ-sCt--QGUqcb/exec; // <--- MI URL
+    let html5QrCode = new Html5Qrcode("reader");
+    let currentCode = "";
+    let lastSavedQty = 0;
+
+    function irAScanner() {
+        const nom = document.getElementById("user-nombre").value;
+        const suc = document.getElementById("user-sucursal").value;
+        if(!nom || !suc) return alert("Completa tus datos");
+
+        document.getElementById("display-nombre").innerText = nom;
+        document.getElementById("display-sucursal").innerText = suc;
+        document.getElementById("pantalla-registro").classList.add("hidden");
+        document.getElementById("pantalla-scanner").classList.remove("hidden");
+        iniciarCamara();
+    }
+
+    function iniciarCamara() {
+        html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (text) => {
+            currentCode = text;
+            document.getElementById("codigo-txt").innerText = text;
+            document.getElementById("form-scan").classList.remove("hidden");
+            document.getElementById("reader").classList.add("hidden");
+            html5QrCode.stop();
+        });
+    }
+
+    function enviarDatos() {
+        const qty = document.getElementById("cantidad").value;
+        const payload = {
+            nombre: document.getElementById("user-nombre").value,
+            sucursal: document.getElementById("user-sucursal").value,
+            codigo: currentCode,
+            cantidad: qty,
+            accion: "insert"
+        };
+
+        fetch(scriptURL, { method: 'POST', body: JSON.stringify(payload) })
+        .then(() => {
+            // Guardar para corregir luego si es necesario
+            document.getElementById("last-ean").innerText = currentCode;
+            document.getElementById("last-qty").innerText = qty;
+            lastSavedQty = qty;
+            document.getElementById("ultimo-registro").classList.remove("hidden");
+            
+            alert("Guardado");
+            cancelarEscaneo();
+        });
+    }
+
+    function corregirUltimo() {
+        const nuevaCant = prompt("Nueva cantidad para el código " + currentCode + ":", lastSavedQty);
+        if (nuevaCant) {
+            fetch(scriptURL, { 
+                method: 'POST', 
+                body: JSON.stringify({ accion: "update", cantidad: nuevaCant }) 
+            })
+            .then(() => {
+                document.getElementById("last-qty").innerText = nuevaCant;
+                lastSavedQty = nuevaCant;
+                alert("Actualizado");
+            });
+        }
+    }
+
+    function cancelarEscaneo() {
+        document.getElementById("form-scan").classList.add("hidden");
+        document.getElementById("reader").classList.remove("hidden");
+        document.getElementById("cantidad").value = "1";
+        iniciarCamara();
+    }
+
+    function volverARegistro() {
+        location.reload();
+    }
+</script>
+</body>
+</html>
