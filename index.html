@@ -92,7 +92,7 @@
             accion: "insert"
         };
 
-        fetch(scriptURL, { method: 'POST', body: JSON.stringify(payload) })
+        fetch(scriptURL, { method: 'POST',mode: 'no-cors',headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
         .then(() => {
             // Guardar para corregir luego si es necesario
             document.getElementById("last-ean").innerText = currentCode;
